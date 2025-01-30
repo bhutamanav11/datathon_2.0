@@ -93,5 +93,6 @@ project_folder/
 - FFmpeg: https://ffmpeg.org/
 
  License
+
 This project is open-source under the MIT License.
 
