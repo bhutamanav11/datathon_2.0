@@ -1,96 +1,97 @@
-Speech-to-Text Transcription
+ Audio Splitting and Transcription using Whisper
 
-   Overview
-This project uses   Vosk  , an offline speech recognition toolkit, to transcribe audio files into text. It is useful for applications where real-time or batch speech processing is required without reliance on cloud-based APIs. The approach ensures privacy, efficiency, and low latency.
+ Overview
+This project splits an audio file into smaller chunks and then transcribes each chunk using OpenAI's Whisper model. The transcripts are saved as text files for further processing.
 
-   Why This Approach?
--   Offline Processing  : No internet connection required.
--   Lightweight Models  : Supports small models for quick transcription and large models for accuracy.
--   Multi-Language Support  : Can transcribe speech in multiple languages.
--   Low Resource Requirement  : Works on CPUs, making it ideal for edge computing.
--   Customizable  : Allows tuning for different accents and noise levels.
+ Prerequisites
+Ensure you have the following installed before running the code:
 
-   Libraries Used
-1.   Vosk   – The core speech recognition engine
-2.   wave   – To handle WAV audio files
-3.   json   – To parse transcription results
-4.   ffmpeg   (Optional) – To convert audio to the required format
-
-   Installation
-Before running the script, install the necessary dependencies:
-```sh
-pip install vosk
-```
-To ensure compatibility, install   FFmpeg   for audio format conversion:
-- Windows: [Download FFmpeg](https://ffmpeg.org/download.html)
-- Linux/macOS:
-  ```sh
-  sudo apt install ffmpeg    Linux
-  brew install ffmpeg    macOS
+- Python 3.8 or later
+- FFmpeg (for audio processing)
+- Required Python libraries:
+  ```bash
+  pip install ffmpeg-python openai-whisper torch
   ```
 
-   Usage
-    1. Convert Audio (If Needed)
-Ensure your audio file is in   16kHz mono WAV format  . If not, convert it using FFmpeg:
-```sh
-ffmpeg -i input_audio.mp3 -acodec pcm_s16le -ar 16000 -ac 1 output_audio.wav
-```
+ Steps
 
-    2. Run the Transcription Script
-Save the following Python script and run it:
+ 1. Audio Splitting
+The audio file is split into smaller chunks using FFmpeg. This ensures that Whisper processes manageable portions, improving transcription accuracy and efficiency.
+
+Code:
 ```python
-import wave
-import json
-from vosk import Model, KaldiRecognizer
+import os
+import ffmpeg
 
-model_path = "path/to/vosk-model"
-audio_path = "path/to/audio.wav"
-
-  Load Vosk model
-model = Model(model_path)
-
-  Open audio file
-wf = wave.open(audio_path, "rb")
-if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() not in [8000, 16000]:
-    print("Audio file must be WAV format (PCM 16-bit, mono, 8kHz or 16kHz).")
-    exit(1)
-
-  Initialize recognizer
-rec = KaldiRecognizer(model, wf.getframerate())
-rec.SetWords(True)
-
-  Transcribe
-while True:
-    data = wf.readframes(4000)
-    if len(data) == 0:
-        break
-    if rec.AcceptWaveform(data):
-        result = json.loads(rec.Result())
-        print(result["text"])
-
-  Final result
-final_result = json.loads(rec.FinalResult())
-print("Final Transcript:", final_result["text"])
+def split_audio(input_audio, output_folder, chunk_duration=30):
+    os.makedirs(output_folder, exist_ok=True)
+    
+    command = (
+        f"ffmpeg -i {input_audio} -f segment -segment_time {chunk_duration} "
+        f"-c copy {output_folder}/chunk_%03d.wav"
+    )
+    os.system(command)
+    print("Audio split successfully.")
 ```
 
-   Troubleshooting
-    Empty Transcripts?
-1.   Ensure Audio Format is Correct  
-   ```sh
-   ffmpeg -i your_audio.wav -af "volumedetect" -f null /dev/null
-   ```
-2.   Check if Model is Loading  
-   ```python
-   from vosk import Model
-   model = Model("path/to/vosk-model")
-   print("Model Loaded Successfully!")
-   ```
-3.   Try a Different Model  
-   - Use a   small   model if performance is slow.
-   - Use a   large   model for better accuracy.
+Usage:
+```python
+split_audio("input_audio.wav", "output_chunks")
+```
 
-   Additional Resources
-- [Vosk Official Documentation](https://alphacephei.com/vosk/models)
-   License
-This project is open-source and available for modification and extension.
+ 2. Transcription using Whisper
+Each split audio chunk is transcribed using the Whisper model.
+
+Code:
+```python
+import whisper
+import os
+
+def transcribe_audio_chunks(input_folder, output_folder):
+    model = whisper.load_model("base")   Load Whisper model
+    os.makedirs(output_folder, exist_ok=True)
+    
+    for file in sorted(os.listdir(input_folder)):
+        if file.endswith(".wav"):
+            file_path = os.path.join(input_folder, file)
+            result = model.transcribe(file_path)
+            
+            output_text_file = os.path.join(output_folder, f"{file}.txt")
+            with open(output_text_file, "w", encoding="utf-8") as f:
+                f.write(result["text"])
+    
+    print("Transcription completed.")
+```
+
+Usage:
+```python
+transcribe_audio_chunks("output_chunks", "transcripts")
+```
+
+ File Structure
+```
+project_folder/
+│── input_audio.wav
+│── output_chunks/
+│   │── chunk_000.wav
+│   │── chunk_001.wav
+│   │── ...
+│── transcripts/
+│   │── chunk_000.wav.txt
+│   │── chunk_001.wav.txt
+│── splitter.py
+│── whisper_transcribe.py
+│── README.md
+```
+
+ Notes
+- Ensure `FFmpeg` is installed and accessible in your system's path.
+- Whisper's accuracy depends on the model size (`base`, `small`, `medium`, `large`). Choose based on your hardware and needs.
+
+ Credits
+- OpenAI Whisper: https://github.com/openai/whisper
+- FFmpeg: https://ffmpeg.org/
+
+ License
+This project is open-source under the MIT License.
 
